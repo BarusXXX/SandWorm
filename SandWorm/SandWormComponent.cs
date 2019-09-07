@@ -6,6 +6,7 @@ using Grasshopper.Kernel;
 using Rhino.Geometry;
 using Microsoft.Kinect;
 using System.Windows.Forms;
+using System.Threading.Tasks;
 // comment 
 // In order to load the result of this wizard, you will also need to
 // add the output bin/ folder of this project to the list of loaded
@@ -18,18 +19,20 @@ namespace SandWorm
     public class SandWorm : GH_Component
     {
         private KinectSensor kinectSensor = null;
-        private List<Point3f> pointCloud = null;
+        private Point3f[] pointCloud;
         private List<Mesh> outputMesh = null;
         public static List<String> output = null;//debugging
-        private Queue<ushort[]> renderBuffer = new Queue<ushort[]>();
+        private Queue<ushort[]> renderBuffer = new Queue<ushort[]>(); // container for depthFrames to average across
+       //private int[] depthSum = new int[KinectController.depthWidth * KinectController.depthHeight]; // container to store the sum of previous values
 
 
         public static int depthPoint;
         public static Color[] lookupTable = new Color[1500]; //to do - fix arbitrary value assuming 1500 mm as max distance from the kinect sensor
         enum MeshColorStyle { noColor, byElevation };
         private MeshColorStyle selectedColorStyle = MeshColorStyle.byElevation; // Must be private to be less accessible than enum type
-        public List<Color> vertexColors;
+        public Color[] vertexColors;
         public Mesh quadMesh = new Mesh();
+        
 
         public int waterLevel;
         public double sensorElevation = 1000; // Arbitrary default value (must be >0)
@@ -82,7 +85,7 @@ namespace SandWorm
             pManager[6].Optional = true;
             pManager[7].Optional = true;
             pManager[8].Optional = true;
-            
+
         }
 
         /// <summary>
@@ -111,7 +114,7 @@ namespace SandWorm
             {
                 selectedColorStyle = (MeshColorStyle)selectedItem.Tag;
                 ExpireSolution(true);
-                quadMesh.VertexColors.Clear(); // Must flush mesh colors to properly updated display
+                quadMesh.VertexColors.Clear(); // Must flush mesh colors to properly update display
             }
             for (int i = 0; i < parentMenu.Items.Count; i++) // Easier than foreach as types differ
             {
@@ -195,14 +198,14 @@ namespace SandWorm
             {
                 if (KinectController.depthFrameData != null)
                 {
-                    pointCloud = new List<Point3f>();
+                    pointCloud = new Point3f[(KinectController.depthHeight - topRows - bottomRows) * (KinectController.depthWidth - leftColumns - rightColumns)];
                     Point3f tempPoint = new Point3f();
                     outputMesh = new List<Mesh>();
                     output = new List<String>(); //debugging
-                    vertexColors = new List<Color>();
-                    Core.PixelSize depthPixelSize = Core.getDepthPixelSpacing(sensorElevation);
-
-
+                    vertexColors = new Color[(KinectController.depthHeight - topRows - bottomRows) * (KinectController.depthWidth - leftColumns - rightColumns)];
+                    Core.PixelSize depthPixelSize = Core.getDepthPixelSpacing(sensorElevation); // to do - offload this to the 'calibration & setup' component. No need to call this function every 20ms
+                    
+                    /*
                     if (blurRadius > 1)
                     {
                         var gaussianBlur = new GaussianBlur(KinectController.depthFrameData);
@@ -214,32 +217,43 @@ namespace SandWorm
                     {
                         renderBuffer.Enqueue(KinectController.depthFrameData);
                     }
+                    */
 
-
-                    for (int rows = topRows; rows < KinectController.depthHeight - bottomRows; rows++)
-
+                    Parallel.For (topRows, KinectController.depthHeight - bottomRows, rows =>
                     {
                         for (int columns = rightColumns; columns < KinectController.depthWidth - leftColumns; columns++)
                         {
 
                             int i = rows * KinectController.depthWidth + columns;
+                            int arrayIndex = i - ((topRows * KinectController.depthWidth) + rightColumns) - ((rows - topRows) * (leftColumns + rightColumns)); //needed for Parallel.For indexing in the new array
 
-                            tempPoint.X = (float)(columns * -unitsMultiplier * depthPixelSize.x); 
-                            tempPoint.Y = (float)(rows * -unitsMultiplier * depthPixelSize.y);
+                            //tempPoint.X = (float)(columns * -unitsMultiplier * depthPixelSize.x);
+                            //tempPoint.Y = (float)(rows * -unitsMultiplier * depthPixelSize.y);
+                            tempPoint.X = (float)(columns * -unitsMultiplier * 3); //to do - fix arbitrary grid size of 3mm
+                            tempPoint.Y = (float)(rows * -unitsMultiplier * 3); //to do - fix arbitrary grid size of 3mm
+
+                            /*
 
                             if (averageFrames > 1)
                             {
+                                
                                 int depthPointRunningSum = 0;
                                 foreach (var frame in renderBuffer)
                                 {
                                     depthPointRunningSum += frame[i];
                                 }
                                 depthPoint = depthPointRunningSum / renderBuffer.Count;
+                                
+
+                                //depthSum[i] += KinectController.depthFrameData[i];
+
                             }
                             else
-                            {
-                                depthPoint = KinectController.depthFrameData[i];
-                            }
+                            {*/
+                            // depthPoint = renderBuffer.Peek()[i];
+                            //}
+
+                            depthPoint = KinectController.depthFrameData[i];
 
                             if (depthPoint == 0 || depthPoint >= lookupTable.Length) //check for invalid pixels
                             {
@@ -248,24 +262,36 @@ namespace SandWorm
 
 
                             tempPoint.Z = (float)((depthPoint - sensorElevation) * -unitsMultiplier);
+                            /*
                             if (selectedColorStyle == MeshColorStyle.byElevation)
-                            { 
-                                vertexColors.Add(lookupTable[depthPoint]);
+                            {
+                                vertexColors[arrayIndex] = Color.FromArgb(128, 128, 128); //lookupTable[depthPoint];
                             }
-
-                            pointCloud.Add(tempPoint);
+                            */
+                            pointCloud[arrayIndex] = tempPoint;
+                            
+                            /*
+                            if (quadMesh.Vertices[arrayIndex] == null || Math.Abs(quadMesh.Vertices[arrayIndex].Z - tempPoint.Z) > 10) //only add a vertex if the elevation difference is greater than 10 mm
+                            {
+                                quadMesh.Vertices[arrayIndex] = tempPoint;
+                            }
+                            */
                         }
-                    };
+                    });
 
+                    /*
                     //keep only the desired amount of frames in the buffer
-                    while (renderBuffer.Count >= averageFrames && averageFrames > 0)
+                    while (renderBuffer.Count > averageFrames && averageFrames > 0)
                     {
                         renderBuffer.Dequeue();
                     }
 
+    */
                     //debugging
                     timer.Stop();
                     output.Add("Point Cloud generation: " + timer.ElapsedMilliseconds.ToString() + " ms");
+                    output.Add(pointCloud.Length.ToString());
+
 
 
                     timer.Restart(); //debugging
