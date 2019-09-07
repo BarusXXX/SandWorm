@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Linq;
 using Rhino.Geometry;
 using Rhino.Display;
 using System.Drawing;
@@ -15,11 +14,11 @@ namespace SandWorm
             int yd = yStride;       // They y-dimension of the data
 
 
-            if (mesh.Faces.Count() != (xStride - 2) * (yStride - 2))
+            if (mesh.Faces.Count != (xStride - 2) * (yStride - 2))
             {
                 SandWorm.output.Add("Face remeshing");
                 mesh = new Mesh();
-                mesh.Vertices.Capacity = vertices.Count();      // Don't resize array
+                mesh.Vertices.Capacity = vertices.Count;      // Don't resize array
                 mesh.Vertices.UseDoublePrecisionVertices = true;
                 mesh.Vertices.AddVertices(vertices);       
 
@@ -36,9 +35,9 @@ namespace SandWorm
             }
             else
             {
-                mesh.Vertices.Clear();
-                mesh.Vertices.UseDoublePrecisionVertices = true; 
-                mesh.Vertices.AddVertices(vertices);       
+                //mesh.Vertices.Clear();
+                //mesh.Vertices.UseDoublePrecisionVertices = true; 
+                //mesh.Vertices.AddVertices(vertices);       
             }
 
             if (colors.Count > 0) // Colors only provided if the mesh style permits

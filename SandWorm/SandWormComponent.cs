@@ -223,6 +223,7 @@ namespace SandWorm
                         {
 
                             int i = rows * KinectController.depthWidth + columns;
+                            int arrayIndex = i - ((topRows * KinectController.depthWidth) + rightColumns) - ((rows - topRows) * (leftColumns + rightColumns));
 
                             tempPoint.X = (float)(columns * -unitsMultiplier * depthPixelSize.x); 
                             tempPoint.Y = (float)(rows * -unitsMultiplier * depthPixelSize.y);
@@ -251,6 +252,11 @@ namespace SandWorm
                             if (selectedColorStyle == MeshColorStyle.byElevation)
                             { 
                                 vertexColors.Add(lookupTable[depthPoint]);
+                            }
+                            
+                            if (quadMesh.Vertices.Count > 0 && Math.Abs(quadMesh.Vertices[arrayIndex].Z - tempPoint.Z) > 5) //only add a vertex if the elevation difference is greater than 10 mm
+                            {
+                                quadMesh.Vertices[arrayIndex] = tempPoint;
                             }
 
                             pointCloud.Add(tempPoint);
