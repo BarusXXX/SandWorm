@@ -14,8 +14,8 @@ namespace SandWorm
         {
             /// <summary>Stories copies of each analysis option and intefaces their use with components.</summary>
             public static List<MeshAnalysis> options;
-            public static List<MeshAnalysis> enabledOptions; 
-            public static List<MeshAnalysisWithMeshGradient> enabledMeshVisualisationOptions; 
+            public static List<MeshAnalysis> enabledOptions;
+            public static List<MeshAnalysisWithMeshGradient> enabledMeshVisualisationOptions;
 
             static AnalysisManager()
             {
@@ -53,7 +53,7 @@ namespace SandWorm
                         exclusiveOption.IsEnabled = selectedOption == exclusiveOption; // Toggle selected item; untoggle other exclusive items
                 else
                     selectedOption.IsEnabled = !selectedOption.IsEnabled; // Simple toggle for independent items
-                SetEnabledLookups(); 
+                SetEnabledLookups();
             }
 
             public static void ComputeLookupTables(double sensorElevation, double waterLevel)
@@ -74,7 +74,7 @@ namespace SandWorm
             }
         }
 
-        public class VisualisationRangeWithColor 
+        public class VisualisationRangeWithColor
         {
             /// <summary>Describes a numeric range (e.g. elevation/slope values) and color range to visualise it.</summary>
             public int ValueStart { get; set; }
@@ -84,7 +84,7 @@ namespace SandWorm
 
             public ColorHSL InterpolateColor(double progress) // Progress is assumed to be a % value of 0.0 - 1.0
             {
-                return new ColorHSL( 
+                return new ColorHSL(
                     ColorStart.H + ((ColorEnd.H - ColorStart.H) * progress),
                     ColorStart.S + ((ColorEnd.S - ColorStart.S) * progress),
                     ColorStart.L + ((ColorEnd.L - ColorStart.L) * progress)
@@ -92,23 +92,23 @@ namespace SandWorm
             }
         }
 
-        public abstract class MeshAnalysis 
+        public abstract class MeshAnalysis
         {
             /// <summary>Inherited by all possible analysis options (even if not coloring the mesh).</summary>
             public string Name { get; } // Name used in the toggle menu
             public bool IsEnabled = false; // Whether to apply the analysis
             public bool IsExclusive { get; set; } // Whether the analysis can be applied independent of other options
-            public ToolStripMenuItem MenuItem { get; set; } 
-            public Dictionary<int, Color> lookupTable; // Dictionary of integers that map to color values
+            public ToolStripMenuItem MenuItem { get; set; }
+            public Color[] lookupTable; // Array of colors whose indices map to analysis values (e.g. elevation)
 
             public MeshAnalysis(string menuName, bool exclusive)
             {
                 Name = menuName;
                 IsExclusive = exclusive;
-            }            
+            }
         }
 
-        public abstract class MeshAnalysisWithMeshGradient: MeshAnalysis
+        public abstract class MeshAnalysisWithMeshGradient : MeshAnalysis
         {
             /// <summary>Inherited by analysis options that color the entire mesh (and are thus mutually exclusive).</summary>
             public abstract Color? GetPixelColorForAnalysis(int elevation);
@@ -121,13 +121,14 @@ namespace SandWorm
                 int lookupTableMaximumSize = 0;
                 foreach (VisualisationRangeWithColor range in lookUpRanges)
                 {
-                    lookupTableMaximumSize += range.ValueEnd - range.ValueStart;
+                    if (range.ValueEnd > lookupTableMaximumSize)
+                        lookupTableMaximumSize = range.ValueEnd;
                 }
 
                 if (lookupTableMaximumSize == 0)
                     return; // Can occur e.g. if the waterLevel is greater than the sensor height
                 else
-                    lookupTable = new Dictionary<int, Color>(lookupTableMaximumSize); // Init dict with needed size
+                    lookupTable = new Color[lookupTableMaximumSize]; // Init array with needed size
 
                 // Populate dict values by interpolating colors within each of the lookup ranges
                 foreach (VisualisationRangeWithColor range in lookUpRanges)
@@ -152,7 +153,7 @@ namespace SandWorm
 
             public override Color? GetPixelColorForAnalysis(int elevation)
             {
-                if (lookupTable.ContainsKey(elevation))
+                if (elevation < lookupTable.Length)
                     return lookupTable[elevation]; // If the elevation is within the water level
                 else
                     return null;
@@ -163,12 +164,12 @@ namespace SandWorm
                 VisualisationRangeWithColor waterRange = new VisualisationRangeWithColor
                 {
                     // From the sensor's perspective water is between specified level and max height (i.e. upside down)
-                    ValueStart = sensorElevation - waterLevel, 
+                    ValueStart = sensorElevation - waterLevel,
                     ValueEnd = sensorElevation,
-                    ColorStart = new ColorHSL(0.55, 0.85, 0.25), 
+                    ColorStart = new ColorHSL(0.55, 0.85, 0.25),
                     ColorEnd = new ColorHSL(0.61, 0.65, 0.65)
                 };
-                ComputeLinearRanges(new VisualisationRangeWithColor[] { waterRange }); 
+                ComputeLinearRanges(new VisualisationRangeWithColor[] { waterRange });
             }
         }
 
@@ -178,8 +179,8 @@ namespace SandWorm
 
             public override Color? GetPixelColorForAnalysis(int elevation)
             {
-                if (lookupTable.ContainsKey(elevation))
-                    return lookupTable[elevation];
+                if (elevation < lookupTable.Length)
+                    return lookupTable[elevation]; // If the elevation is within the water level
                 else
                     return null;
             }
@@ -197,7 +198,7 @@ namespace SandWorm
 
             }
         }
-        
+
         class Slope : MeshAnalysisWithMeshGradient
         {
             public Slope() : base("Visualise Slope", true) { }
@@ -211,7 +212,7 @@ namespace SandWorm
             {
                 VisualisationRangeWithColor slopeRange = new VisualisationRangeWithColor
                 {
-                    ValueStart = 0, 
+                    ValueStart = 0,
                     ValueEnd = 90,
                     ColorStart = new ColorHSL(1.0, 1.0, 1.0), // White
                     ColorEnd = new ColorHSL(1.0, 1.0, 0.3) // Dark Red
@@ -233,7 +234,7 @@ namespace SandWorm
             {
                 VisualisationRangeWithColor rightAspect = new VisualisationRangeWithColor
                 {
-                    ValueStart = 0, 
+                    ValueStart = 0,
                     ValueEnd = 180,
                     ColorStart = new ColorHSL(1.0, 1.0, 1.0), // White
                     ColorEnd = new ColorHSL(1.0, 1.0, 0.3) // Dark Red

@@ -200,6 +200,7 @@ namespace SandWorm
                     Point3d tempPoint = new Point3d();
                     Core.PixelSize depthPixelSize = Core.GetDepthPixelSpacing(sensorElevation);
 
+                    Analysis.MeshAnalysisWithMeshGradient[] enabledOptions = Analysis.AnalysisManager.enabledMeshVisualisationOptions.ToArray();
                     // Only initialise a full-size vertex color array if a mesh-coloring visualisation is enabled
                     if (Analysis.AnalysisManager.enabledMeshVisualisationOptions.Count > 0)
                         vertexColors = new Color[trimmedWidth * trimmedHeight];
@@ -275,10 +276,20 @@ namespace SandWorm
                             tempPoint.Z = (depthPoint - sensorElevation) * -unitsMultiplier;
 
                             pointCloud[arrayIndex] = tempPoint;
-                            
+                            /*
                             if (vertexColors.Length > 0) // Proxy for whether a mesh-coloring visualisation has been enabled
                                 vertexColors[arrayIndex] = Analysis.AnalysisManager.GetPixelColor((int)depthPoint);
- 
+ */
+                            for (int k = 0; k < enabledOptions.Length; k++)
+                            {
+                                Color? test = enabledOptions[k].GetPixelColorForAnalysis((int)depthPoint);
+                                if (test.HasValue)
+                                {
+                                    vertexColors[arrayIndex] = test.Value;
+                                    break;
+                                }
+                            }
+
                             arrayIndex++;
                         }
                     }
